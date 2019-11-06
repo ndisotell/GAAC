@@ -1,0 +1,60 @@
+---
+title: "GAAC"
+author: "N. Disotell"
+date: "11/6/2019"
+output: html_document
+---
+Gasterosteus aculeatus (the three spined stickleback), mapped known localities & heat map of probability of occurence. 
+```{r echo=FALSE}
+packages<-c("dismo","rgbif","rdryad","utils","readxl","spotifyr","ggridges","viridis","rasterVis", "ggplot2", "maps", "raster")
+sapply(packages, require, character.only=T)
+
+extent <- extent(-130,-70,20,60)
+
+gaac_dismo <- gbif("gasterosteus", species = "aculeatus", ext = extent,
+                   geo = TRUE, sp = TRUE, download = TRUE,
+                   removeZeros = TRUE)
+
+gaac_xy <- as.data.frame(cbind(gaac_dismo@coords[,1],gaac_dismo@coords[,2]))
+colnames(gaac_xy) <- c("longitude","latitude")
+
+us <- map_data("world")
+
+ggplot(data = gaac_xy, aes(x=longitude, y=latitude)) +
+  geom_polygon(data = us, aes(x=long, y = lat, group = group),
+               fill = "white", color="black") +
+  geom_point() + xlab("Longitude") + ylab("Latitude") +
+  coord_fixed(xlim = c(-128,-115), ylim = c(50,32))
+
+bioclim <- getData(name = "worldclim", res = 2.5, var = "bio")
+
+names(bioclim) <- c("Ann Mean Temp","Mean Diurnal Range","Isothermality","Temperature Seasonality",
+                    "Max Temp Warmest Mo","Min Temp Coldest Mo","Ann Temp Range","Mean Temp Wettest Qtr",
+                    "Mean Temp Driest Qtr","Mean Temp Warmest Qtr","Mean Temp Coldest Qtr","Annual Precip",
+                    "Precip Wettest Mo","Precip Driest Mo","Precip Seasonality","Precip Wettest Qtr",
+                    "Precip Driest Qtr","Precip Warmest Qtr","Precip Coldest Qtr")
+
+bio_extent <- extent(x = c(
+  min(gaac_xy$longitude),
+  max(gaac_xy$longitude),
+  min(gaac_xy$latitude),
+  max(gaac_xy$latitude)))
+
+bioclim_extent <- crop(x = bioclim, y = bio_extent)
+bioclim_model <- bioclim(x = bioclim_extent, p = gaac_xy)
+presence_model <- dismo::predict(object = bioclim_model, 
+                                 x = bioclim_extent, 
+                                 ext = bio_extent)
+
+gplot(presence_model) + 
+  geom_raster(aes(fill=value)) +
+  geom_polygon(data = us, aes(x= long, y = lat, group = group),
+               fill = NA, color="black") +
+  scale_fill_gradientn(colours=c("brown","yellow","darkgreen"), "Probability") +
+  coord_fixed(xlim = c(-128,-115), ylim = c(50,32)) +
+  xlab("Longitude") + ylab("Latitude") + ggtitle("Probability of GAAC Occurrence") + 
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5)) + theme(legend.position = "right") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank())
+```
+
